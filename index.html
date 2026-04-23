@@ -229,13 +229,18 @@
           <p>カメラを起動するか<br>画像をアップロード</p>
         </div>
       </div>
-      <div class="btn-row cols-2">
+      <div class="btn-row cols-3">
         <button class="btn" id="startCamBtn">📷 カメラ</button>
-        <button class="btn" id="uploadBtn">🖼 画像を選ぶ</button>
+        <button class="btn" id="stopCamBtn" disabled>⏹ OFF</button>
+        <button class="btn" id="uploadBtn">🖼 画像</button>
       </div>
       <div class="btn-row cols-2">
         <button class="btn" id="captureBtn" disabled>⚡ 撮影する</button>
         <button class="btn primary" id="solveBtn" disabled>✦ 解いて</button>
+      </div>
+      <div style="padding: 10px 12px; border-top: 1px solid var(--border);">
+        <div style="font-family:'Space Mono',monospace; font-size:0.55rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;">追加指示（任意）</div>
+        <textarea id="extraInstruction" placeholder="例：答えだけ書いて　／　英語で答えて　／　もっと簡単に説明して" style="width:100%; background:var(--bg); border:1px solid var(--border); border-radius:3px; padding:9px 12px; color:var(--text); font-family:serif; font-size:0.8rem; line-height:1.7; resize:none; outline:none; height:64px;" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
       </div>
       <input type="file" id="fileInput" accept="image/*">
     </div>
@@ -275,6 +280,7 @@
         <div id="answerText"></div>
       </div>
       <button class="copy-btn" id="copyBtn" style="display:none">コピー</button>
+      <button class="copy-btn" id="clearBtn" style="display:none">✕ クリア</button>
     </div>
   </div>
 
@@ -301,9 +307,9 @@
   const captureBtn=$('captureBtn'), solveBtn=$('solveBtn');
   const fileInput=$('fileInput'), answerPanel=$('answerPanel');
   const answerText=$('answerText'), loadingState=$('loadingState'), loadingText=$('loadingText');
-  const copyBtn=$('copyBtn'), statusBadge=$('statusBadge'), modelUsedBadge=$('modelUsedBadge');
+  const copyBtn=$('copyBtn'), clearBtn=$('clearBtn'), statusBadge=$('statusBadge'), modelUsedBadge=$('modelUsedBadge');
   const apikeyInput=$('apikeyInput'), apikeyStatus=$('apikeyStatus'), apikeySave=$('apikeySave');
-  const flipBtn=$('flipBtn');
+  const flipBtn=$('flipBtn'), stopCamBtn=$('stopCamBtn');
 
   // Load saved API key
   try {
@@ -365,6 +371,7 @@
       placeholder.style.display = 'none';
       cameraArea.classList.add('active');
       captureBtn.disabled = false;
+      stopCamBtn.disabled = false;
       flipBtn.classList.add('visible');
       capturedImageData = null;
       solveBtn.disabled = true;
@@ -372,6 +379,17 @@
       alert('カメラの起動に失敗しました。\nブラウザの設定でカメラの許可をしてください。');
     }
   }
+
+  // Stop camera
+  stopCamBtn.addEventListener('click', () => {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    videoEl.style.display = 'none';
+    placeholder.style.display = 'flex';
+    cameraArea.classList.remove('active');
+    flipBtn.classList.remove('visible');
+    captureBtn.disabled = true;
+    stopCamBtn.disabled = true;
+  });
 
   startCamBtn.addEventListener('click', () => startCamera());
 
@@ -429,7 +447,9 @@
     loadingText.textContent = `${selectedModelName} が読み取り中...`;
 
     const subjectHint = selectedSubject !== '自動判別' ? `この問題は「${selectedSubject}」の問題です。` : '';
-    const prompt = `${subjectHint}\n添付の画像に写っている問題を解いてください。\n\n以下の形式で丁寧に答えてください：\n1. 問題の内容を確認（1〜2行）\n2. 解き方・考え方の説明\n3. 答え（明確に）\n\n日本語で答えてください。`;
+    const extra = ($('extraInstruction').value || '').trim();
+    const extraHint = extra ? `\n\n追加指示：${extra}` : '';
+    const prompt = `${subjectHint}\n添付の画像に写っている問題を解いてください。\n\n以下の形式で丁寧に答えてください：\n1. 問題の内容を確認（1〜2行）\n2. 解き方・考え方の説明\n3. 答え（明確に）\n\n日本語で答えてください。${extraHint}`;
 
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -464,7 +484,7 @@
         let i = 0;
         const type = () => {
           if (i < fullText.length) { answerText.textContent += fullText[i++]; setTimeout(type, 16); }
-          else { answerText.classList.remove('typing'); statusBadge.style.display = 'inline'; copyBtn.style.display = 'inline-block'; solveBtn.disabled = false; }
+          else { answerText.classList.remove('typing'); statusBadge.style.display = 'inline'; copyBtn.style.display = 'inline-block'; clearBtn.style.display = 'inline-block'; solveBtn.disabled = false; }
         };
         type();
       } else {
@@ -484,6 +504,16 @@
       copyBtn.textContent = 'コピーしました ✓';
       setTimeout(() => { copyBtn.textContent = 'コピー'; }, 1500);
     } catch {}
+  });
+
+  clearBtn.addEventListener('click', () => {
+    answerText.textContent = '';
+    answerText.classList.remove('typing');
+    statusBadge.style.display = 'none';
+    copyBtn.style.display = 'none';
+    clearBtn.style.display = 'none';
+    modelUsedBadge.textContent = '';
+    answerPanel.classList.remove('visible');
   });
 </script>
 </body>
